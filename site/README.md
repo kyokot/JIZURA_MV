@@ -3,7 +3,8 @@
 リズム進軍アクション「ドラムレギオン」の紹介ページです。画面に出てくる立体（王・兵・敵・城・太鼓・木）は、3D モデルではなく
 **スプライトスタッキング**（輪切りにしたドット絵を 1 ドットずつずらして積み、全部を同じ角度で回す）で描いています。
 
-- React + Vite + Tailwind CSS、動きは [motion](https://motion.dev/)（旧 framer-motion）
+- [Astro](https://astro.build/)（ゲーム本体と同じ）で静的な HTML を出力し、動く部分だけを React の「島」として載せています（`src/islands.tsx`）
+- Tailwind CSS、動きは [motion](https://motion.dev/)（旧 framer-motion）
 - 立体の描画は `src/stack/engine.ts`（2D キャンバス。小さく描いて、ぼかさずに拡大）
 - 拍の時計と音は `src/lib/beat.ts`（120 BPM。音は「太鼓を鳴らす」を押したときだけ鳴ります）
 
@@ -12,15 +13,19 @@
 ```sh
 npm install
 npm run dev      # 開発サーバー
-npm run build    # 型検査 + ビルド（dist/）
+npm run build    # 型検査（astro check）+ 静的ビルド（dist/）
 npm run preview  # ビルド結果の確認
 ```
 
-「出陣する」ボタンのリンク先は、ビルド時の環境変数 `VITE_GAME_URL` で指定します（未指定ではゲームのリポジトリを開きます）。
+「出陣する」ボタンのリンク先は、ビルド時の環境変数 `PUBLIC_GAME_URL` で指定します（未指定ではゲームのリポジトリを開きます）。
+サブパスで公開するときは、ゲーム本体と同じく `BASE_PATH` を指定します。
 
 ```sh
-VITE_GAME_URL=https://example.com/drum-legion/ npm run build
+PUBLIC_GAME_URL=https://example.com/drum-legion/ BASE_PATH=/site/ npm run build
 ```
+
+ヒーローは読み込み直後に、ほかのセクションは画面に入ったときに動き始めます（`src/pages/index.astro` の `client:load` / `client:visible`）。
+文章は最初から HTML に入っているので、JavaScript が動く前でも読めます。
 
 ## 立体の素材を作り直す
 

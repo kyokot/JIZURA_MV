@@ -1,15 +1,18 @@
 {
   "name": "drum-legion-site",
-  "private": true,
-  "version": "0.1.0",
   "type": "module",
+  "version": "0.2.0",
+  "private": true,
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "check": "astro check",
     "models": "python3 tools/build_models.py"
   },
   "dependencies": {
+    "@astrojs/react": "^4.2.0",
+    "astro": "^5.18.2",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
     "motion": "^12.0.0",
@@ -18,12 +21,11 @@
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.4",
     "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.3.4",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.6.3",
-    "vite": "^6.0.0"
+    "typescript": "^5.6.3"
   }
 }

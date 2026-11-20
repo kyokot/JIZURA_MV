@@ -1,0 +1,41 @@
+---
+import '../styles/global.css';
+import { Anatomy, Army, Enemies, Finale, Hero, Marquee, Rules, ScrollProgress, TapGame } from '../islands';
+
+const title = 'ドラムレギオン — 拍に乗って軍を進めるリズム進軍アクション';
+const description =
+  '拍に合わせた一歩は必ず通り、外した一歩は必ず返される。拍に乗って軍を進め、仲間を救い出し、城主を討つリズム進軍アクション。ブラウザで遊べます。';
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#120e1a" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet" />
+    <!-- Without JavaScript nothing animates in, so show everything that waits for it. -->
+    <noscript><style>main [style*="opacity"] { opacity: 1 !important; transform: none !important; }</style></noscript>
+  </head>
+  <body>
+    <ScrollProgress client:idle />
+    <main>
+      <!-- The hero is on screen at once; the rest wake up as they scroll into view. -->
+      <Hero client:load />
+      <Marquee client:visible items={['拍に乗れ', 'PERFECT ×2', '会心 ×3', 'GROOVE!', 'FEVER!!', '仲間を救え', '城主を討て']} />
+      <TapGame client:visible />
+      <Anatomy client:visible />
+      <Army client:visible />
+      <Enemies client:visible />
+      <Rules client:visible />
+      <Finale client:visible />
+    </main>
+  </body>
+</html>

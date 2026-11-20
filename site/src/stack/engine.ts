@@ -59,7 +59,7 @@ export function loadModels(): Promise<Models> {
             resolve([name, { img, sil, ...manifest[name] }]);
           };
           img.onerror = () => reject(new Error(`could not load stacks/${name}.png`));
-          img.src = `${import.meta.env.BASE_URL}stacks/${name}.png`;
+          img.src = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/stacks/${name}.png`; // BASE_URL may or may not end in a slash
         }),
     ),
   ).then((list) => Object.fromEntries(list) as Models);
