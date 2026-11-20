@@ -59,6 +59,9 @@ def _text_image(p, palette):
     im = Image.new('L', (max(1, box[2] - box[0]), max(1, box[3] - box[1])), 0)
     ImageDraw.Draw(im).text((-box[0], -box[1]), text, fill=255, font=font)
     mask = np.asarray(im) >= int(p.get('threshold', 128))  # hard edge: anti-aliased greys are not pixel art
+    for _ in range(int(p.get('bold', 0))):  # thicken thin strokes by one dot per step
+        m = np.pad(mask, 1)
+        mask = m | np.roll(m, 1, 0) | np.roll(m, 1, 1) | np.roll(np.roll(m, 1, 0), 1, 1)
     out = np.zeros(mask.shape + (4,), np.uint8)
     out[mask] = rgba(p.get('color', '#ffffff'), palette)
     return out
@@ -399,16 +402,20 @@ class Scene:
         self.cam = {k: compile_value(cam.get(k, dv)) for k, dv in dict(yaw=0, x=0, y=0, zoom=1, squash=1).items()}
         self.yaw_steps = s.get('yaw_steps')            # e.g. 32 = snap rotation to 32 directions
         self.bg = s.get('background', 'transparent')
+        self.origin = s.get('origin')                  # [x, y] as fractions of the frame: where world (0, 0) sits
+        self.clipped = []                              # times at which an object ran off the frame
         self.floor = s.get('floor')
         models = {}
         self.objects = []
         for o in s.get('objects', []):
-            key = json.dumps([o['model'], o.get('slices'), o.get('slice_size'), o.get('layout'), o.get('top_first'), o.get('wall')])
-            if key not in models:
-                V = load_model(self.path.parent / o['model'], **{k: o[k] for k in ('slices', 'slice_size', 'layout', 'top_first') if k in o})
-                models[key] = bake_walls(V, o.get('wall', 0.18))
-            n = int(o.get('count', 1))
+            names = o['model'] if isinstance(o['model'], list) else [o['model']]  # a list gives each copy its own model
+            n = int(o.get('count', len(names)))
             for i in range(n):
+                name = names[i % len(names)]
+                key = json.dumps([name, o.get('slices'), o.get('slice_size'), o.get('layout'), o.get('top_first'), o.get('wall')])
+                if key not in models:
+                    V = load_model(self.path.parent / name, **{k: o[k] for k in ('slices', 'slice_size', 'layout', 'top_first') if k in o})
+                    models[key] = bake_walls(V, o.get('wall', 0.18))
                 self.objects.append(dict(
                     V=models[key], i=i, n=n, spec=o,
                     vals={k: compile_value(o.get(k, dv)) for k, dv in OBJ_DEFAULTS.items()},
@@ -436,7 +443,8 @@ class Scene:
         if fl:  # a checkerboard on the ground, turning with the camera: sells the rotation
             size = fl.get('size', 16)
             cols = [np.array(rgba(c), np.uint8) for c in fl.get('colors', ['#2a2a3a', '#343448'])]
-            sxx, syy = np.meshgrid(np.arange(w) + .5 - w / 2, np.arange(h) + .5 - (h * fl.get('horizon', 0.5)))
+            ox, oy = self.center()
+            sxx, syy = np.meshgrid(np.arange(w) + .5 - ox, np.arange(h) + .5 - oy)
             gx, gy = sxx / cam['zoom'], syy / (cam['zoom'] * cam['squash'])
             a = math.radians(cam['yaw'])
             wx = math.cos(a) * gx + math.sin(a) * gy + cam['x']
@@ -449,13 +457,18 @@ class Scene:
             blit(img, tile.astype(np.uint8), 0, 0)
         return img
 
+    def center(self):
+        if self.origin:
+            return self.w * self.origin[0], self.h * self.origin[1]
+        return self.w / 2, self.h * (self.floor or {}).get('horizon', 0.5)
+
     def frame(self, t):
         """One frame at the small internal size (RGBA)."""
         env = self.env(t)
         cam = {k: f(env) for k, f in self.cam.items()}
         img = self.background(env, cam)
         ca = math.radians(cam['yaw'])
-        cx, cy = self.w / 2, self.h * (self.floor or {}).get('horizon', 0.5)
+        cx, cy = self.center()
         drawn = []
         for o in self.objects:
             e = dict(env, i=o['i'], n=o['n'])
@@ -471,7 +484,7 @@ class Scene:
             dx, dy = p['x'] - cam['x'], p['y'] - cam['y']
             rx = (math.cos(ca) * dx - math.sin(ca) * dy) * cam['zoom']
             ry = (math.sin(ca) * dx + math.cos(ca) * dy) * cam['zoom']
-            yaw = p['yaw'] + cam['yaw']
+            yaw = p['yaw'] + (0 if sp.get('face_camera') else cam['yaw'])  # face_camera: keep its front to the viewer
             if self.yaw_steps:
                 yaw = round(yaw * self.yaw_steps / 360) * 360 / self.yaw_steps
             spr, ax, ay, foot, fay = render_stack(o['V'], yaw, p['scale'] * cam['zoom'], p['gap'], squash,
@@ -479,6 +492,11 @@ class Scene:
             gx, gy = cx + rx, cy + ry * squash
             drawn.append((ry, spr, int(round(gx - ax)), int(round(gy - ay - p['z'] * cam['zoom'])), p['opacity'],
                           foot, int(round(gx - foot.shape[1] / 2)), int(round(gy - fay)), sp.get('shadow', 0.3)))
+        for _, spr, x, y, *_ in drawn:
+            ys, xs = np.nonzero(spr[..., 3])  # the drawn pixels, not the sprite's padded box
+            if len(xs) and (x + xs.min() < 0 or y + ys.min() < 0 or x + xs.max() >= self.w or y + ys.max() >= self.h):
+                if not self.clipped or self.clipped[-1] != env['t']:
+                    self.clipped.append(env['t'])
         for _, _, _, _, op, foot, fx, fy, sh in drawn:  # all shadows first, so no object is shadowed from below
             if sh:
                 s = np.zeros(foot.shape + (4,), np.uint8)
@@ -542,8 +560,23 @@ def cmd_turntable(a):
     print(f'wrote {out} ({a.frames} directions, cell {frames[0].width}x{frames[0].height})')
 
 
-def cmd_still(a):
+def _open_scene(a):
     sc = Scene(a.scene)
+    if getattr(a, 'bg', None):  # same scene, different backdrop: transparent frames and a preview from one file
+        sc.bg = a.bg
+    return sc
+
+
+def _warn_clipped(sc):
+    if sc.clipped:
+        c = sc.clipped
+        print(f'warning: an object is cut off by the frame edge at {len(c)} moment(s), e.g. t = '
+              + ', '.join(f'{t:.2f}s' for t in c[:5]) + '. Move it, lower "scale"/"gap"/"z", or lower "pixel_scale"; '
+              'ignore this if running off the edge is intended.')
+
+
+def cmd_still(a):
+    sc = _open_scene(a)
     times = [float(x) for x in a.times.split(',')] if a.times else [sc.duration * (k + .5) / 6 for k in range(6)]
     shots = [Image.fromarray(sc.frame(t)).resize((sc.w * a.scale, sc.h * a.scale), Image.NEAREST) for t in times]
     cols = min(len(shots), 3)
@@ -552,10 +585,11 @@ def cmd_still(a):
         sheet.paste(s, ((k % cols) * s.width, (k // cols) * s.height), s)
     sheet.save(a.output)
     print(f'wrote {a.output}: t = {", ".join(f"{t:g}s" for t in times)}')
+    _warn_clipped(sc)
 
 
 def cmd_render(a):
-    sc = Scene(a.scene)
+    sc = _open_scene(a)
     t0 = a.start or 0
     t1 = a.end if a.end is not None else sc.duration
     n = max(1, int(round((t1 - t0) * sc.fps)))
@@ -600,6 +634,7 @@ def cmd_render(a):
     if ext == '.gif':
         W, H = gif[0].size
     print(f'wrote {out}: {n} frames, {W}x{H} at {sc.fps:g} fps ({n / sc.fps:.2f}s)')
+    _warn_clipped(sc)
 
 
 def _probe(path):
@@ -692,10 +727,12 @@ def main():
     p.set_defaults(fn=cmd_turntable)
     p = sub.add_parser('still', help='contact sheet of a scene at chosen times'); p.add_argument('scene')
     p.add_argument('-t', '--times', help='seconds, comma separated (default: six moments across the scene)')
-    p.add_argument('-o', '--output', required=True); p.add_argument('--scale', type=int, default=2); p.set_defaults(fn=cmd_still)
+    p.add_argument('-o', '--output', required=True); p.add_argument('--scale', type=int, default=2)
+    p.add_argument('--bg', help='override the scene background (a colour)'); p.set_defaults(fn=cmd_still)
     p = sub.add_parser('render', help='render a scene'); p.add_argument('scene')
     p.add_argument('-o', '--output', required=True, help='.mp4, .mov (ProRes 4444 with alpha), .webm (alpha), .gif, or a directory for PNGs')
     p.add_argument('--start', type=float); p.add_argument('--end', type=float); p.add_argument('--audio'); p.add_argument('--gif-scale', type=int)
+    p.add_argument('--bg', help='override the scene background (a colour), e.g. for a preview of a transparent scene')
     p.set_defaults(fn=cmd_render)
     p = sub.add_parser('composite', help='layer videos / PNG sequences bottom to top and add audio', description=cmd_composite.__doc__)
     p.add_argument('layers', nargs='+'); p.add_argument('-o', '--output', required=True)
