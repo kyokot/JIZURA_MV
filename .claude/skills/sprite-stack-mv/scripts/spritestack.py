@@ -6,6 +6,7 @@ A model is a pile of 2D slices, bottom to top. Each frame, every slice is rotate
 step higher than the one below, which reads as a rotating 3D object while every pixel stays pixel art.
 
     spritestack.py model      MODEL -o sheet.png          convert any model to a slice sheet
+    spritestack.py views      views.png -o sheet.png      carve slices out of top/side/front/back drawings
     spritestack.py turntable  MODEL -o spin.gif           check a model from every side
     spritestack.py still      scene.json -t 0,2,4 -o s.png   contact sheet of moments in a scene
     spritestack.py render     scene.json -o out.mp4       .mp4 / .mov (alpha) / .gif / directory of PNGs
@@ -254,6 +255,108 @@ def bake_walls(V, wall):
     return V
 
 
+# ---------- slices from four flat views (top, side, front, back) ----------
+def _cutout(im):
+    """RGBA array with a hard alpha. A sheet without transparency is keyed on its corner colour."""
+    a = np.asarray(im.convert('RGBA')).copy()
+    if (a[..., 3] < 128).any():
+        a[..., 3] = np.where(a[..., 3] >= 128, 255, 0)
+    else:
+        bg = a[0, 0, :3].astype(int)
+        a[..., 3] = np.where(np.abs(a[..., :3].astype(int) - bg).sum(-1) > 48, 255, 0)
+    return a
+
+
+def _crop(a):
+    ys, xs = np.nonzero(a[..., 3])
+    if not len(ys):
+        raise SystemExit('views: one of the drawings is empty')
+    return a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+
+
+def _split(a, axis):
+    """Cut a sheet in two at the widest empty band along an axis."""
+    used = (a[..., 3] > 0).any(axis=1 - axis)
+    idx = np.nonzero(used)[0]
+    gaps = np.diff(idx)
+    if not len(gaps) or gaps.max() < 2:
+        raise SystemExit('views: could not find four separate drawings; leave clear space between them')
+    cut = idx[gaps.argmax()] + 1
+    return (a[:cut], a[cut:]) if axis == 0 else (a[:, :cut], a[:, cut:])
+
+
+def _strip_outline(v, dark=70):
+    """A dark pixel on the rim of a drawing is its outline; give it the colour of the pixel inside. An outline left
+    in the views ends up inside the stack as dark speckle, so the stack is outlined once, at render time, instead."""
+    m = v[..., 3] > 0
+    pad = np.pad(m, 1)
+    rim = m & ~(pad[:-2, 1:-1] & pad[2:, 1:-1] & pad[1:-1, :-2] & pad[1:-1, 2:])
+    line = rim & (v[..., :3].astype(int).mean(-1) < dark)
+    out = v.copy()
+    for y, x in zip(*np.nonzero(line)):
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            yy, xx = y + dy, x + dx
+            if 0 <= yy < m.shape[0] and 0 <= xx < m.shape[1] and m[yy, xx] and not line[yy, xx]:
+                out[y, x] = v[yy, xx]
+                break
+    return out
+
+
+def _row_colour(view, r, i):
+    xs = np.nonzero(view[r, :, 3])[0]
+    return None if not len(xs) else view[r, min(max(i, xs[0]), xs[-1]), :3]
+
+
+def model_from_views(top, side, front, back, side_nose='left', top_nose='down', keep_outline=False):
+    """Carve a model out of four orthographic drawings. A voxel exists where the top, side and front/back views all
+    have a pixel; tops take the top view's colour and walls the colour of the view they face. Holes and overhangs
+    cannot come out of flat views; fix those slices by hand afterwards."""
+    views = [_crop(v) for v in (top, side, front, back)]
+    if not keep_outline:
+        views = [_strip_outline(v) for v in views]
+    top, side, front, back = views
+    if side_nose == 'left':
+        side = side[:, ::-1]      # column = y, the front (+y) last
+    if top_nose == 'up':
+        top = top[::-1]
+    back = back[:, ::-1]          # seen from behind, left and right are swapped
+    L, W = top.shape[:2]
+    H = max(1, round(side.shape[0] * L / side.shape[1]))  # height at the top view's scale
+    fit = lambda v, w: np.asarray(Image.fromarray(v).resize((w, H), Image.NEAREST))
+    side, front, back = fit(side, L), fit(front, W), fit(back, W)
+    V = np.zeros((H, L, W, 4), np.uint8)
+    solid = np.zeros((H, L, W), bool)
+    for z in range(H):
+        r = H - 1 - z
+        across = (front[r, :, 3] > 0) | (back[r, :, 3] > 0)
+        solid[z] = (top[..., 3] > 0) & (side[r, :, 3] > 0)[:, None] & across[None, :]
+    covered = np.zeros((L, W), bool)
+    for z in range(H - 1, -1, -1):
+        r = H - 1 - z
+        o = solid[z]
+        for y, x in zip(*np.nonzero(o)):
+            if not covered[y, x]:
+                c = top[y, x, :3]  # nothing above: seen from the top
+            else:
+                # distance to open air toward -x, +x, -y (back), +y (front): the nearest is the wall it belongs to
+                d = []
+                for dy, dx in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+                    k, yy, xx = 0, y, x
+                    while 0 <= yy < L and 0 <= xx < W and o[yy, xx]:
+                        yy += dy; xx += dx; k += 1
+                    d.append(k)
+                f = int(np.argmin(d))
+                if d[f] > 2:
+                    c = V[z + 1, y, x, :3]  # deep inside: carry the colour above down
+                else:
+                    c = _row_colour(side, r, y) if f < 2 else _row_colour(back if f == 2 else front, r, x)
+                    if c is None:
+                        c = top[y, x, :3]
+            V[z, y, x] = (*c, 255)
+        covered |= o
+    return V
+
+
 def to_sheet(V):
     return Image.fromarray(np.concatenate(list(V), axis=1))  # horizontal strip, bottom slice first
 
@@ -290,7 +393,7 @@ def render_stack(V, yaw=0.0, scale=1.0, gap=1.0, squash=1.0, shade=0.0, outline=
         if not m.any():
             continue
         y0 = pad + rise - int(round(i * g))
-        for k in range(fill):
+        for k in range(fill if i < h - 1 else 1):  # the top slice has nothing above it to reach
             out[y0 - k:y0 - k + nh, pad:pad + n][m] = R[i][m]
     if outline:
         s = out[..., 3] > 0
@@ -536,6 +639,25 @@ def cmd_model(a):
         print(f'wrote {a.output} (horizontal strip, bottom slice first; load it with "slices": {h})')
 
 
+def cmd_views(a):
+    ims = [_cutout(Image.open(f)) for f in a.inputs]
+    if len(ims) == 1:  # one sheet with four drawings: the tallest is the top view, the widest the side view
+        rows = _split(ims[0], 0)
+        cells = [_crop(c) for row in rows for c in _split(row, 1)]
+        top = max(cells, key=lambda v: v.shape[0] / v.shape[1])
+        side = max((v for v in cells if v is not top), key=lambda v: v.shape[1] / v.shape[0])
+        front, back = [v for v in cells if v is not top and v is not side]
+    elif len(ims) == 4:
+        top, side, front, back = ims
+    else:
+        raise SystemExit('views: give one sheet holding four drawings, or four files in the order top side front back')
+    V = model_from_views(top, side, front, back, a.side_nose, a.top_nose, a.keep_outline)
+    to_sheet(V).save(a.output)
+    h, d, w, _ = V.shape
+    print(f'wrote {a.output}: {h} slices of {w} x {d} px (load it with "slices": {h}). '
+          'Check it with turntable: if the front and back look swapped, rerun with --top-nose up or --side-nose right.')
+
+
 def cmd_turntable(a):
     V = bake_walls(load_model(a.model, slices=a.slices, top_first=a.top_first), a.wall)
     outline = rgba(a.outline) if a.outline else None
@@ -719,6 +841,13 @@ def main():
         p.add_argument('--top-first', action='store_true', help='the sheet starts with the top slice')
     p = sub.add_parser('model', help='report a model and convert it to a slice sheet'); model_args(p)
     p.add_argument('-o', '--output'); p.set_defaults(fn=cmd_model)
+    p = sub.add_parser('views', help='carve a slice sheet out of four flat views (top, side, front, back)')
+    p.add_argument('inputs', nargs='+', help='one sheet with the four drawings, or four files: top side front back')
+    p.add_argument('-o', '--output', required=True)
+    p.add_argument('--side-nose', choices=['left', 'right'], default='left', help='which way the side view faces')
+    p.add_argument('--top-nose', choices=['down', 'up'], default='down', help='where the front is in the top view')
+    p.add_argument('--keep-outline', action='store_true', help='do not remove dark outlines from the views')
+    p.set_defaults(fn=cmd_views)
     p = sub.add_parser('turntable', help='spin a model: .gif, or .png sheet of every direction'); model_args(p)
     p.add_argument('-o', '--output', required=True); p.add_argument('--frames', type=int, default=24)
     p.add_argument('--seconds', type=float, default=2.4); p.add_argument('--scale', type=int, default=6)
