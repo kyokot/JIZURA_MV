@@ -1,0 +1,10 @@
+{
+  "width": 1920, "height": 1080, "fps": 24, "pixel_scale": 6,
+  "bpm": 120, "beats": 16, "anim_fps": 12,
+  "background": "transparent",
+  "camera": {"squash": 0.6},
+  "objects": [
+    {"model": "lantern.json", "scale": 3, "yaw": "b * 45", "z": "6 * bounce(b / 2)",
+     "gap": "1 + 0.35 * pulse(b)", "outline": "#1b1b26"}
+  ]
+}

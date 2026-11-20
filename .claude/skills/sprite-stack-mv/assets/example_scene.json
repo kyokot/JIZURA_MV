@@ -1,0 +1,15 @@
+{
+  "width": 1280, "height": 720, "fps": 24, "pixel_scale": 4,
+  "bpm": 120, "beats": 16, "anim_fps": 12,
+  "background": {"gradient": ["#141428", "#2a1838"]},
+  "floor": {"size": 20, "colors": ["#241c3a", "#2e2448"], "radius": 150, "horizon": 0.62},
+  "camera": {"yaw": "bar * 45", "squash": 0.6},
+  "objects": [
+    {"model": "kanji.json", "yaw": "-bar * 45 + 12 * sin(b * pi / 2)", "z": "4 + 6 * bounce(b / 2)",
+     "gap": "1 + 0.5 * pulse(b)", "scale": 2, "outline": "#141428", "shade": 0.35},
+    {"model": "lantern.json", "count": 6, "x": "95 * cos(tau * i / n)", "y": "95 * sin(tau * i / n)",
+     "yaw": "b * 30", "z": "5 * bounce(b + i / 2)", "gap": "1 + 0.4 * pulse(b + i / 2)", "outline": "#141428"},
+    {"model": "speaker.json", "count": 2, "x": "(i * 2 - 1) * 48", "y": 10, "yaw": "(1 - i * 2) * 25",
+     "scale": "1 + 0.12 * pulse(b, 6)", "outline": "#141428"}
+  ]
+}
