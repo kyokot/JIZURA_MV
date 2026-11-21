@@ -1,0 +1,11 @@
+{
+  "palette": {"red": "#d8382e", "dark": "#8f1f24", "gold": "#f2c14e", "black": "#1b1b26", "glow": "#ffe9a8"},
+  "parts": [
+    {"type": "cylinder", "center": [12, 12], "radius": 4.5, "z": [0, 2], "color": "black"},
+    {"type": "lathe", "center": [12, 12], "z0": 2,
+     "radii": [5.5, 7.5, 9, 10, 10.6, 11, 11, 11, 11, 10.6, 10, 9, 7.5, 5.5],
+     "colors": ["dark", "red", "red", "glow", "red", "red", "dark", "red", "red", "glow", "red", "red", "red", "dark"]},
+    {"type": "cylinder", "center": [12, 12], "radius": 4.5, "z": [16, 18], "color": "black"},
+    {"type": "box", "from": [11, 11, 18], "to": [13, 13, 21], "color": "gold"}
+  ]
+}

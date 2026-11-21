@@ -1,0 +1,33 @@
+{
+  "size": [44, 14, 30],
+  "palette": {"body": "#c9ccd6", "bodytop": "#e8eaf0", "dark": "#23253a", "cone": "#3a3d5c", "ring": "#ff4d6d",
+              "dust": "#f4f1de", "deck": "#1b1b2b", "win": "#7bdff2", "btn": "#ffd166", "foot": "#14151f", "ant": "#9aa0b5"},
+  "parts": [
+    {"type": "box", "from": [3, 2, 0], "to": [8, 12, 2], "color": "foot"},
+    {"type": "box", "from": [36, 2, 0], "to": [41, 12, 2], "color": "foot"},
+    {"type": "box", "from": [0, 1, 2], "to": [44, 13, 22], "color": "body", "color_top": "bodytop"},
+    {"type": "box", "from": [0, 1, 18], "to": [44, 13, 19], "color": "dark"},
+    {"type": "ellipsoid", "center": [9, 13, 10], "radii": [7.5, 1.6, 7.5], "color": "ring"},
+    {"type": "ellipsoid", "center": [9, 13, 10], "radii": [6, 2, 6], "color": "cone"},
+    {"type": "ellipsoid", "center": [9, 13, 10], "radii": [2.2, 2.6, 2.2], "color": "dust"},
+    {"type": "ellipsoid", "center": [35, 13, 10], "radii": [7.5, 1.6, 7.5], "color": "ring"},
+    {"type": "ellipsoid", "center": [35, 13, 10], "radii": [6, 2, 6], "color": "cone"},
+    {"type": "ellipsoid", "center": [35, 13, 10], "radii": [2.2, 2.6, 2.2], "color": "dust"},
+    {"type": "box", "from": [17, 12, 6], "to": [27, 14, 15], "color": "deck"},
+    {"type": "box", "from": [18, 13, 9], "to": [26, 14, 13], "color": "win"},
+    {"type": "box", "from": [20, 13, 10], "to": [21, 14, 12], "color": "dust"},
+    {"type": "box", "from": [23, 13, 10], "to": [24, 14, 12], "color": "dust"},
+    {"type": "box", "from": [17, 12, 3], "to": [19, 14, 5], "color": "btn"},
+    {"type": "box", "from": [20, 12, 3], "to": [22, 14, 5], "color": "ring"},
+    {"type": "box", "from": [23, 12, 3], "to": [25, 14, 5], "color": "btn"},
+    {"type": "box", "from": [26, 12, 3], "to": [28, 14, 5], "color": "win"},
+    {"type": "box", "from": [14, 5, 22], "to": [30, 9, 23], "color": "dark"},
+    {"type": "box", "from": [16, 6, 23], "to": [19, 8, 24], "color": "btn"},
+    {"type": "box", "from": [21, 6, 23], "to": [24, 8, 24], "color": "ring"},
+    {"type": "box", "from": [26, 6, 23], "to": [29, 8, 24], "color": "win"},
+    {"type": "box", "from": [5, 6, 22], "to": [7, 8, 28], "color": "dark"},
+    {"type": "box", "from": [37, 6, 22], "to": [39, 8, 28], "color": "dark"},
+    {"type": "box", "from": [5, 6, 28], "to": [39, 8, 30], "color": "dark"},
+    {"type": "box", "from": [8, 6, 28], "to": [36, 8, 30], "color": "ring"}
+  ]
+}
